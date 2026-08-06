@@ -36,12 +36,12 @@ func PutTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	byteResp, err := db.UpdateTask(task)
+	err = db.UpdateTask(task)
 	if err != nil {
 		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	SendOkJSONBytes(w, http.StatusOK, byteResp)
+	SendOkJSONBytes(w, http.StatusOK, []byte("{}"))
 
 }

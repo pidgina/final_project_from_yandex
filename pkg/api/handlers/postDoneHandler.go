@@ -14,11 +14,11 @@ func DonePostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	byteResp, err := service.PostDone(id)
+	err := service.PostDone(id)
 	if err != nil {
 		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	SendOkJSONBytes(w, http.StatusOK, byteResp)
+	SendOkJSONBytes(w, http.StatusOK, []byte("{}"))
 
 }

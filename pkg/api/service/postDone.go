@@ -6,10 +6,10 @@ import (
 	"proj/pkg/db"
 )
 
-func PostDone(id string) ([]byte, error) {
+func PostDone(id string) error {
 	task, err := db.GetTaskID(id)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if task.Repeat == "" {
@@ -22,12 +22,8 @@ func PostDone(id string) ([]byte, error) {
 		task.Repeat,
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if err := db.UpdateTaskDate(task.ID, nextDate); err != nil {
-		return nil, err
-	}
-
-	return []byte("{}"), nil
+	return db.UpdateTaskDate(task.ID, nextDate)
 }
