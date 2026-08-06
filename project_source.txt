@@ -1101,46 +1101,39 @@ func Init(dbFile string) error {
 
 
 ==================================================
+FILE: ./pkg/db/task.go
+==================================================
+package db
+
+type Task struct {
+	ID      string `json:"id"`
+	Date    string `json:"date"`
+	Title   string `json:"title"`
+	Comment string `json:"comment"`
+	Repeat  string `json:"repeat"`
+}
+
+
+==================================================
 FILE: ./pkg/db/deleteTask.go
 ==================================================
 package db
 
-import (
-	"time"
-
-	"proj/pkg/db"
-)
-
-func CheckDate(task *db.Task) error {
-	now := time.Now()
-	var next string
-	if task.Date == "" {
-		task.Date = now.Format(LayoutDate)
-	}
-
-	t, err := time.Parse(LayoutDate, task.Date)
-
+func DeleteTask(id string) ([]byte, error) {
+	task, err := GetTaskID(id)
 	if err != nil {
-		return err
-	}
-	if task.Repeat != "" {
-		next, err = NextDate(now, task.Date, task.Repeat)
-		if err != nil {
-			return err
-		}
+		return nil, NoneID
 	}
 
-	nowTester := now.Format(LayoutDate)
-	nowTest, err := time.Parse(LayoutDate, nowTester)
-
-	if t.Before(nowTest) {
-		if len(task.Repeat) == 0 {
-			task.Date = now.Format(LayoutDate)
-		} else {
-			task.Date = next
-		}
+	_, err = DBOpen.Exec(
+		"DELETE FROM scheduler WHERE id = ?",
+		task.ID,
+	)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+
+	return []byte("{}"), nil
 }
 
 
@@ -1200,14 +1193,6 @@ import (
 
 	_ "modernc.org/sqlite"
 )
-
-type Task struct {
-	ID      string `json:"id"`
-	Date    string `json:"date"`
-	Title   string `json:"title"`
-	Comment string `json:"comment"`
-	Repeat  string `json:"repeat"`
-}
 
 func AddTask(task Task) (int64, error) {
 	var id int64
@@ -1351,18 +1336,12 @@ import (
 	"encoding/hex"
 	"net/http"
 
+	"proj/pkg/api/handlers"
 	"proj/pkg/api/service"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-//	func AuthMiddleware(next http.Handler) http.Handler {
-//		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-//			pass := service.AutherENV()
-//			if len(pass) <= 0 {
-//				next.ServeHTTP(w, r)
-//				return
-//			}
 func AuthMiddleware(pass string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1376,22 +1355,21 @@ func AuthMiddleware(pass string) func(http.Handler) http.Handler {
 
 			cookie, err := r.Cookie("token")
 			if err != nil {
-				service.SendErrorJSON(w, "Необходимо авторизоваться", http.StatusUnauthorized)
+				handlers.SendErrorJSON(w, "Необходимо авторизоваться", http.StatusUnauthorized)
 				return
 			}
 			jwtToken, err := jwt.ParseWithClaims(cookie.Value, &claims, func(t *jwt.Token) (any, error) {
 				return []byte(service.Secret), nil
 			})
 			if err != nil || !jwtToken.Valid {
-				service.SendErrorJSON(w, "Необходимо авторизоваться", http.StatusUnauthorized)
+				handlers.SendErrorJSON(w, "Необходимо авторизоваться", http.StatusUnauthorized)
 				return
 			}
 			hashedPassword := sha256.Sum256([]byte(pass))
 			hashStringPassword := hex.EncodeToString(hashedPassword[:])
 
 			if claims.PasswordHash != hashStringPassword {
-				service.SendErrorJSON(w, "Необходимо авторизоваться", http.StatusUnauthorized)
-				w.WriteHeader(http.StatusUnauthorized)
+				handlers.SendErrorJSON(w, "Необходимо авторизоваться", http.StatusUnauthorized)
 				return
 			}
 
@@ -1399,151 +1377,6 @@ func AuthMiddleware(pass string) func(http.Handler) http.Handler {
 
 		})
 	}
-
-}
-
-
-==================================================
-FILE: ./pkg/api/service/deleteTask.go
-==================================================
-package service
-
-import (
-	"errors"
-
-	"proj/pkg/db"
-)
-
-var NoneID = errors.New("Задача с указанным id не найдена")
-
-func DeleteTask(id string) ([]byte, error) {
-
-	taska, err := GetTaskID(id)
-	if err != nil {
-		return nil, NoneID
-	}
-
-	_, err = db.DBOpen.Exec("DELETE FROM scheduler WHERE id = ?", taska.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	return []byte("{}"), nil
-
-}
-
-
-==================================================
-FILE: ./pkg/api/service/updateTask.go
-==================================================
-package service
-
-import (
-	"proj/pkg/db"
-)
-
-func UpdateTask(task Task) ([]byte, error) {
-	if task.ID == "" {
-		return nil, NoneID
-	}
-
-	_, err := GetTaskID(task.ID)
-	if err != nil {
-		return nil, NoneID
-	}
-
-	_, err = db.DBOpen.Exec(`UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?`,
-		task.Date,
-		task.Title,
-		task.Comment,
-		task.Repeat,
-		task.ID,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return []byte("{}"), nil
-}
-
-
-==================================================
-FILE: ./pkg/api/service/sendJSON.go
-==================================================
-package service
-
-import (
-	"encoding/json"
-	"log"
-	"net/http"
-)
-
-func SendOkJSONBytes(w http.ResponseWriter, status int, b []byte) {
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.WriteHeader(status)
-
-	_, err := w.Write(b)
-	if err != nil {
-		log.Printf("Ошибка записи JSON ответа: %v", err)
-	}
-
-}
-
-func SendErrorJSON(w http.ResponseWriter, errorString string, statusCode int) {
-	type response struct {
-		Error string `json:"error"`
-	}
-	var res response
-	res.Error = errorString
-
-	jsByte, err := json.Marshal(res)
-	if err != nil {
-		http.Error(w, "Ошибка подготовки ответа", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.WriteHeader(statusCode)
-	w.Write(jsByte)
-
-}
-
-
-==================================================
-FILE: ./pkg/api/service/addTask.go
-==================================================
-package service
-
-import (
-	"database/sql"
-
-	"proj/pkg/db"
-
-	_ "modernc.org/sqlite"
-)
-
-type Task struct {
-	ID      string `json:"id"`
-	Date    string `json:"date"`
-	Title   string `json:"title"`
-	Comment string `json:"comment"`
-	Repeat  string `json:"repeat"`
-}
-
-func AddTask(task Task) (int64, error) {
-	var id int64
-	res, err := db.DBOpen.Exec("INSERT INTO scheduler (date, title, comment, repeat) VALUES (:date, :title, :comment, :repeat)",
-		sql.Named("date", task.Date),
-		sql.Named("title", task.Title),
-		sql.Named("comment", task.Comment),
-		sql.Named("repeat", task.Repeat))
-	if err != nil {
-		return 0, err
-	}
-
-	id, err = res.LastInsertId()
-
-	return id, nil
 
 }
 
@@ -1586,45 +1419,35 @@ FILE: ./pkg/api/service/postDone.go
 package service
 
 import (
-	"database/sql"
 	"time"
 
 	"proj/pkg/db"
 )
 
 func PostDone(id string) ([]byte, error) {
-	var res string
-	now := time.Now()
-
-	taska, err := GetTaskID(id)
+	task, err := db.GetTaskID(id)
 	if err != nil {
 		return nil, err
 	}
 
-	if taska.Repeat == "" {
-		jsByte, err := DeleteTask(id)
-		if err != nil {
-			return nil, err
-		}
-		return jsByte, nil
-	} else {
-		res, err = NextDate(now, taska.Date, taska.Repeat)
-		if err != nil {
-			return nil, err
-		}
-
-		_, err = db.DBOpen.Exec("UPDATE scheduler SET date = :date WHERE id = :id",
-			sql.Named("date", res),
-			sql.Named("id", taska.ID))
-
-		if err != nil {
-			return nil, err
-		}
-
-		return []byte("{}"), nil
-
+	if task.Repeat == "" {
+		return db.DeleteTask(id)
 	}
 
+	nextDate, err := NextDate(
+		time.Now(),
+		task.Date,
+		task.Repeat,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := db.UpdateTaskDate(task.ID, nextDate); err != nil {
+		return nil, err
+	}
+
+	return []byte("{}"), nil
 }
 
 
@@ -1834,123 +1657,6 @@ func NextDate(now time.Time, dstart string, repeat string) (string, error) {
 
 
 ==================================================
-FILE: ./pkg/api/service/getTaskID.go
-==================================================
-package service
-
-import (
-	"log"
-	"strconv"
-
-	"proj/pkg/db"
-)
-
-func GetTaskID(id string) (Task, error) {
-	var res Task
-
-	intStr, err := strconv.Atoi(id)
-	if err != nil {
-		return Task{}, err
-	}
-
-	err = db.DBOpen.QueryRow("SELECT * FROM scheduler WHERE id = ?", intStr).Scan(&res.ID, &res.Date, &res.Title, &res.Comment, &res.Repeat)
-
-	if err != nil {
-		log.Println(err)
-		return Task{}, err
-	}
-
-	return res, nil
-
-}
-
-
-==================================================
-FILE: ./pkg/api/service/getListTasks.go
-==================================================
-package service
-
-import (
-	"database/sql"
-	"time"
-
-	"proj/pkg/db"
-
-	_ "modernc.org/sqlite"
-)
-
-type TasksResp struct {
-	Tasks []Task `json:"tasks"`
-}
-
-const (
-	Limit = 50
-)
-
-func GetListTask(limit int, search string) (TasksResp, error) {
-
-	var (
-		rows *sql.Rows
-		err  error
-	)
-	if search == "" {
-		rows, err = db.DBOpen.Query(
-			"SELECT * FROM scheduler ORDER BY date LIMIT ?",
-			limit,
-		)
-		if err != nil {
-			return TasksResp{}, err
-		}
-		defer rows.Close()
-
-	} else {
-		tims, err := time.Parse("02.01.2006", search)
-		if err == nil {
-			timesis := tims.Format(LayoutDate)
-
-			rows, err = db.DBOpen.Query("SELECT * FROM scheduler WHERE date = ? ORDER BY date LIMIT ?",
-				timesis, limit)
-			if err != nil {
-				return TasksResp{}, err
-			}
-			defer rows.Close()
-		} else {
-			searchFind := "%" + search + "%"
-			rows, err = db.DBOpen.Query("SELECT * FROM scheduler WHERE title LIKE ? OR comment LIKE ? ORDER BY date LIMIT ?",
-				searchFind, searchFind, limit)
-			if err != nil {
-				return TasksResp{}, err
-			}
-			defer rows.Close()
-		}
-
-	}
-
-	var res Task
-	var resTask TasksResp
-
-	for rows.Next() {
-		err := rows.Scan(&res.ID, &res.Date, &res.Title, &res.Comment, &res.Repeat)
-		if err != nil {
-			return TasksResp{}, err
-		}
-		resTask.Tasks = append(resTask.Tasks, res)
-	}
-
-	if err := rows.Err(); err != nil {
-		return TasksResp{}, err
-	}
-
-	if resTask.Tasks == nil {
-		resTask.Tasks = []Task{}
-	}
-
-	return resTask, nil
-
-}
-
-
-==================================================
 FILE: ./pkg/api/service/login.go
 ==================================================
 package service
@@ -2006,9 +1712,13 @@ FILE: ./pkg/api/service/checkDate.go
 ==================================================
 package service
 
-import "time"
+import (
+	"time"
 
-func CheckDate(task *Task) error {
+	"proj/pkg/db"
+)
+
+func CheckDate(task *db.Task) error {
 	now := time.Now()
 	var next string
 	if task.Date == "" {
@@ -2050,28 +1760,28 @@ import (
 	"errors"
 	"net/http"
 
-	"proj/pkg/api/service"
+	"proj/pkg/db"
 )
 
 func DeleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 
 	if id == "" {
-		service.SendErrorJSON(w, "Поле id не может быть пустым", http.StatusBadRequest)
+		SendErrorJSON(w, "Поле id не может быть пустым", http.StatusBadRequest)
 		return
 	}
 
-	byteResp, err := service.DeleteTask(id)
+	byteResp, err := db.DeleteTask(id)
 	if err != nil {
-		if errors.Is(err, service.NoneID) {
-			service.SendErrorJSON(w, err.Error(), http.StatusBadRequest)
+		if errors.Is(err, db.NoneID) {
+			SendErrorJSON(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	service.SendOkJSONBytes(w, http.StatusOK, byteResp)
+	SendOkJSONBytes(w, http.StatusOK, byteResp)
 
 }
 
@@ -2086,7 +1796,7 @@ import (
 	"log"
 	"net/http"
 
-	"proj/pkg/api/service"
+	"proj/pkg/db"
 )
 
 func GetIDHandler(w http.ResponseWriter, r *http.Request) {
@@ -2094,24 +1804,24 @@ func GetIDHandler(w http.ResponseWriter, r *http.Request) {
 
 	if id == "" {
 		log.Println("Попытка получить данные по пустому ID")
-		service.SendErrorJSON(w, "Поле id не может быть пустым", http.StatusBadRequest)
+		SendErrorJSON(w, "Поле id не может быть пустым", http.StatusBadRequest)
 		return
 	}
 
-	res, err := service.GetTaskID(id)
+	res, err := db.GetTaskID(id)
 	if err != nil {
 		log.Println(err.Error())
-		service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	byteResp, err := json.Marshal(res)
 	if err != nil {
-		service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	service.SendOkJSONBytes(w, http.StatusOK, byteResp)
+	SendOkJSONBytes(w, http.StatusOK, byteResp)
 
 }
 
@@ -2137,23 +1847,23 @@ func LoginHandle(w http.ResponseWriter, r *http.Request) {
 	bodyByte, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.Println("Попытка передачи некорректного запроса в body")
-		service.SendErrorJSON(w, "Передано некорректное значение в запросе", http.StatusBadRequest)
+		SendErrorJSON(w, "Передано некорректное значение в запросе", http.StatusBadRequest)
 		return
 	}
 
 	err = json.Unmarshal(bodyByte, &pass)
 	if err != nil {
-		service.SendErrorJSON(w, "Ошибка десериализации JSON", http.StatusInternalServerError)
+		SendErrorJSON(w, "Ошибка десериализации JSON", http.StatusInternalServerError)
 		return
 	}
 
 	resp, err := service.LoginAuther(pass)
 	if err != nil {
 		if errors.Is(err, service.InvalidPassword) {
-			service.SendErrorJSON(w, err.Error(), http.StatusUnauthorized)
+			SendErrorJSON(w, err.Error(), http.StatusUnauthorized)
 			return
 		} else {
-			service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+			SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
@@ -2161,11 +1871,11 @@ func LoginHandle(w http.ResponseWriter, r *http.Request) {
 
 	byteResp, err := json.Marshal(resp)
 	if err != nil {
-		service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	service.SendOkJSONBytes(w, http.StatusOK, byteResp)
+	SendOkJSONBytes(w, http.StatusOK, byteResp)
 
 }
 
@@ -2232,16 +1942,16 @@ func NextDayHandler(w http.ResponseWriter, r *http.Request) {
 
 	time, err := time.Parse(service.LayoutDate, now)
 	if err != nil {
-		service.SendErrorJSON(w, err.Error(), http.StatusBadRequest)
+		SendErrorJSON(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	res, err := service.NextDate(time, date, repeat)
 	if err != nil {
 		if errors.Is(err, service.ErrYear) || errors.Is(err, service.ErrMounth) || errors.Is(err, service.ErrWeek) || errors.Is(err, service.ErrDay) || errors.Is(err, service.ErrRepeat) {
-			service.SendErrorJSON(w, err.Error(), http.StatusBadRequest)
+			SendErrorJSON(w, err.Error(), http.StatusBadRequest)
 		} else {
-			service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+			SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
 	}
@@ -2261,27 +1971,27 @@ import (
 	"log"
 	"net/http"
 
-	"proj/pkg/api/service"
+	"proj/pkg/db"
 )
 
 func GetTaskHandler(w http.ResponseWriter, r *http.Request) {
 	search := r.FormValue("search")
 
-	tasks, err := service.GetListTask(service.Limit, search)
+	tasks, err := db.GetListTask(db.Limit, search)
 	if err != nil {
 		log.Println(err.Error())
-		service.SendErrorJSON(w, "Не удалось получить задачи", http.StatusInternalServerError)
+		SendErrorJSON(w, "Не удалось получить задачи", http.StatusInternalServerError)
 		return
 	}
 
 	jsonbyte, err := json.Marshal(tasks)
 	if err != nil {
 		log.Println(err.Error())
-		service.SendErrorJSON(w, "Не удалось подготовить тело ответа.", http.StatusInternalServerError)
+		SendErrorJSON(w, "Не удалось подготовить тело ответа.", http.StatusInternalServerError)
 		return
 	}
 
-	service.SendOkJSONBytes(w, http.StatusOK, jsonbyte)
+	SendOkJSONBytes(w, http.StatusOK, jsonbyte)
 
 }
 
@@ -2301,16 +2011,16 @@ func DonePostHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 
 	if id == "" {
-		service.SendErrorJSON(w, "Поле id не может быть пустым", http.StatusBadRequest)
+		SendErrorJSON(w, "Поле id не может быть пустым", http.StatusBadRequest)
 		return
 	}
 
 	byteResp, err := service.PostDone(id)
 	if err != nil {
-		service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	service.SendOkJSONBytes(w, http.StatusOK, byteResp)
+	SendOkJSONBytes(w, http.StatusOK, byteResp)
 
 }
 
@@ -2326,42 +2036,43 @@ import (
 	"net/http"
 
 	"proj/pkg/api/service"
+	"proj/pkg/db"
 )
 
 func PutTaskHandler(w http.ResponseWriter, r *http.Request) {
 
-	var task service.Task
+	var task db.Task
 
 	byteBody, err := io.ReadAll(r.Body)
 	if err != nil {
-		service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	err = json.Unmarshal(byteBody, &task)
 	if err != nil {
-		service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if task.Title == "" {
-		service.SendErrorJSON(w, "Не указан заголовок задачи", http.StatusBadRequest)
+		SendErrorJSON(w, "Не указан заголовок задачи", http.StatusBadRequest)
 		return
 	}
 
 	err = service.CheckDate(&task)
 	if err != nil {
-		service.SendErrorJSON(w, "Ошибка при проверке параметров", http.StatusBadRequest)
+		SendErrorJSON(w, "Ошибка при проверке параметров", http.StatusBadRequest)
 		return
 	}
 
-	byteResp, err := service.UpdateTask(task)
+	byteResp, err := db.UpdateTask(task)
 	if err != nil {
-		service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	service.SendOkJSONBytes(w, http.StatusOK, byteResp)
+	SendOkJSONBytes(w, http.StatusOK, byteResp)
 
 }
 
@@ -2378,37 +2089,38 @@ import (
 	"strconv"
 
 	"proj/pkg/api/service"
+	"proj/pkg/db"
 )
 
 func AddTaskHandler(w http.ResponseWriter, r *http.Request) {
 
-	var task service.Task
+	var task db.Task
 
 	byteBody, err := io.ReadAll(r.Body)
 	if err != nil {
-		service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	err = json.Unmarshal(byteBody, &task)
 	if err != nil {
-		service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if task.Title == "" {
-		service.SendErrorJSON(w, "Не указан заголовок задачи", http.StatusBadRequest)
+		SendErrorJSON(w, "Не указан заголовок задачи", http.StatusBadRequest)
 		return
 	}
 	err = service.CheckDate(&task)
 	if err != nil {
-		service.SendErrorJSON(w, "Ошибка при проверке параметров.", http.StatusBadRequest)
+		SendErrorJSON(w, "Ошибка при проверке параметров.", http.StatusBadRequest)
 		return
 	}
 
-	id, err := service.AddTask(task)
+	id, err := db.AddTask(task)
 	if err != nil {
-		service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -2421,11 +2133,11 @@ func AddTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	jsByte, err := json.Marshal(resp)
 	if err != nil {
-		service.SendErrorJSON(w, "Ошибка подготовки ответа", http.StatusInternalServerError)
+		SendErrorJSON(w, "Ошибка подготовки ответа", http.StatusInternalServerError)
 		return
 	}
 
-	service.SendOkJSONBytes(w, http.StatusCreated, jsByte)
+	SendOkJSONBytes(w, http.StatusCreated, jsByte)
 
 }
 

@@ -1,8 +1,12 @@
 package service
 
-import "time"
+import (
+	"time"
 
-func CheckDate(task *Task) error {
+	"proj/pkg/db"
+)
+
+func CheckDate(task *db.Task) error {
 	now := time.Now()
 	var next string
 	if task.Date == "" {

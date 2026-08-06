@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"proj/pkg/api/service"
+	"proj/pkg/db"
 )
 
 func GetIDHandler(w http.ResponseWriter, r *http.Request) {
@@ -13,23 +13,23 @@ func GetIDHandler(w http.ResponseWriter, r *http.Request) {
 
 	if id == "" {
 		log.Println("Попытка получить данные по пустому ID")
-		service.SendErrorJSON(w, "Поле id не может быть пустым", http.StatusBadRequest)
+		SendErrorJSON(w, "Поле id не может быть пустым", http.StatusBadRequest)
 		return
 	}
 
-	res, err := service.GetTaskID(id)
+	res, err := db.GetTaskID(id)
 	if err != nil {
 		log.Println(err.Error())
-		service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	byteResp, err := json.Marshal(res)
 	if err != nil {
-		service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	service.SendOkJSONBytes(w, http.StatusOK, byteResp)
+	SendOkJSONBytes(w, http.StatusOK, byteResp)
 
 }

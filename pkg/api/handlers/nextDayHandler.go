@@ -15,16 +15,16 @@ func NextDayHandler(w http.ResponseWriter, r *http.Request) {
 
 	time, err := time.Parse(service.LayoutDate, now)
 	if err != nil {
-		service.SendErrorJSON(w, err.Error(), http.StatusBadRequest)
+		SendErrorJSON(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	res, err := service.NextDate(time, date, repeat)
 	if err != nil {
 		if errors.Is(err, service.ErrYear) || errors.Is(err, service.ErrMounth) || errors.Is(err, service.ErrWeek) || errors.Is(err, service.ErrDay) || errors.Is(err, service.ErrRepeat) {
-			service.SendErrorJSON(w, err.Error(), http.StatusBadRequest)
+			SendErrorJSON(w, err.Error(), http.StatusBadRequest)
 		} else {
-			service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+			SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
 	}

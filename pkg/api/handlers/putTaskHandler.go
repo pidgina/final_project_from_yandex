@@ -6,41 +6,42 @@ import (
 	"net/http"
 
 	"proj/pkg/api/service"
+	"proj/pkg/db"
 )
 
 func PutTaskHandler(w http.ResponseWriter, r *http.Request) {
 
-	var task service.Task
+	var task db.Task
 
 	byteBody, err := io.ReadAll(r.Body)
 	if err != nil {
-		service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	err = json.Unmarshal(byteBody, &task)
 	if err != nil {
-		service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if task.Title == "" {
-		service.SendErrorJSON(w, "Не указан заголовок задачи", http.StatusBadRequest)
+		SendErrorJSON(w, "Не указан заголовок задачи", http.StatusBadRequest)
 		return
 	}
 
 	err = service.CheckDate(&task)
 	if err != nil {
-		service.SendErrorJSON(w, "Ошибка при проверке параметров", http.StatusBadRequest)
+		SendErrorJSON(w, "Ошибка при проверке параметров", http.StatusBadRequest)
 		return
 	}
 
-	byteResp, err := service.UpdateTask(task)
+	byteResp, err := db.UpdateTask(task)
 	if err != nil {
-		service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	service.SendOkJSONBytes(w, http.StatusOK, byteResp)
+	SendOkJSONBytes(w, http.StatusOK, byteResp)
 
 }
