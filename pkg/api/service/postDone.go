@@ -2,45 +2,41 @@ package service
 
 import (
 	"database/sql"
-	"net/http"
 	"time"
+
+	"proj/pkg/db"
 )
 
-func PostDone(id string, w http.ResponseWriter, r *http.Request) ([]byte, error, int) {
+func PostDone(id string) ([]byte, error) {
 	var res string
 	now := time.Now()
 
-	taska, err, status := GetTaskID(id)
+	taska, err := GetTaskID(id)
 	if err != nil {
-		return nil, err, status
+		return nil, err
 	}
 
 	if taska.Repeat == "" {
-		jsByte, err, status := DeleteTask(id)
+		jsByte, err := DeleteTask(id)
 		if err != nil {
-			return nil, err, status
+			return nil, err
 		}
-		return jsByte, nil, status
+		return jsByte, nil
 	} else {
 		res, err = NextDate(now, taska.Date, taska.Repeat)
 		if err != nil {
-			return nil, err, http.StatusInternalServerError
+			return nil, err
 		}
-		db, err := sql.Open("sqlite", PathDbManual())
-		if err != nil {
-			return nil, err, http.StatusInternalServerError
-		}
-		defer db.Close()
 
-		_, err = db.Exec("UPDATE scheduler SET date = :date WHERE id = :id",
+		_, err = db.DBOpen.Exec("UPDATE scheduler SET date = :date WHERE id = :id",
 			sql.Named("date", res),
 			sql.Named("id", taska.ID))
 
 		if err != nil {
-			return nil, err, http.StatusInternalServerError
+			return nil, err
 		}
 
-		return []byte("{}"), nil, http.StatusOK
+		return []byte("{}"), nil
 
 	}
 

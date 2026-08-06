@@ -1,62 +1,29 @@
 package service
 
 import (
-	"database/sql"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-
-	_ "modernc.org/sqlite"
+	"proj/pkg/db"
 )
 
-func UpdateTask(w http.ResponseWriter, r *http.Request) ([]byte, error, int) {
+func UpdateTask(task Task) ([]byte, error) {
+	if task.ID == "" {
+		return nil, NoneID
+	}
 
-	var task Task
-
-	byteBody, err := io.ReadAll(r.Body)
+	_, err := GetTaskID(task.ID)
 	if err != nil {
-		return nil, err, http.StatusInternalServerError
+		return nil, NoneID
 	}
 
-	err = json.Unmarshal(byteBody, &task)
+	_, err = db.DBOpen.Exec(`UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?`,
+		task.Date,
+		task.Title,
+		task.Comment,
+		task.Repeat,
+		task.ID,
+	)
 	if err != nil {
-		return nil, err, http.StatusInternalServerError
+		return nil, err
 	}
 
-	if task.Title == "" {
-		return nil, fmt.Errorf("Не указан заголовок задачи"), http.StatusBadRequest
-	}
-
-	err = CheckDate(&task)
-	if err != nil {
-		return nil, fmt.Errorf("Ошибка при проверке параметров"), http.StatusBadRequest
-	}
-
-	db, err := sql.Open("sqlite", PathDbManual())
-	if err != nil {
-		return nil, err, http.StatusInternalServerError
-	}
-	defer db.Close()
-
-	res, err := db.Exec("UPDATE scheduler SET date = :date, title = :title, comment = :comment, repeat = :repeat WHERE id = :id",
-		sql.Named("date", task.Date),
-		sql.Named("title", task.Title),
-		sql.Named("comment", task.Comment),
-		sql.Named("repeat", task.Repeat),
-		sql.Named("id", task.ID))
-
-	if err != nil {
-		return nil, err, http.StatusInternalServerError
-	}
-
-	count, err := res.RowsAffected()
-	if err != nil {
-		return nil, err, http.StatusInternalServerError
-	}
-	if count == 0 {
-		return nil, fmt.Errorf("incorrect id for updating task"), http.StatusInternalServerError
-	}
-
-	return []byte("{}"), nil, http.StatusOK
+	return []byte("{}"), nil
 }

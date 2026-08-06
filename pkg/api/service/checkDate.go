@@ -6,7 +6,7 @@ func CheckDate(task *Task) error {
 	now := time.Now()
 	var next string
 	if task.Date == "" {
-		task.Date = now.Format(LayoutDate) // если дата не указана берем текущую
+		task.Date = now.Format(LayoutDate)
 	}
 
 	t, err := time.Parse(LayoutDate, task.Date)

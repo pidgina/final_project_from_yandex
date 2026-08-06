@@ -9,7 +9,6 @@ FROM --platform=linux/amd64 alpine:latest
 WORKDIR /app
 COPY --from=builder /app/my_app .
 COPY web/ web/
-EXPOSE 7540
 
 CMD ["./my_app"]
 

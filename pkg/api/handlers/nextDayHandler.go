@@ -1,10 +1,11 @@
 package handlers
 
 import (
-	"log"
+	"errors"
 	"net/http"
-	"proj/pkg/api/service"
 	"time"
+
+	"proj/pkg/api/service"
 )
 
 func NextDayHandler(w http.ResponseWriter, r *http.Request) {
@@ -14,14 +15,17 @@ func NextDayHandler(w http.ResponseWriter, r *http.Request) {
 
 	time, err := time.Parse(service.LayoutDate, now)
 	if err != nil {
-		log.Println(err.Error())
-		http.Error(w, "Ошибка парсинга полученного из пути параметра date", http.StatusBadRequest)
+		service.SendErrorJSON(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	res, err := service.NextDate(time, date, repeat)
 	if err != nil {
-		http.Error(w, "Ошибка вычисления следующей даты", http.StatusInternalServerError)
+		if errors.Is(err, service.ErrYear) || errors.Is(err, service.ErrMounth) || errors.Is(err, service.ErrWeek) || errors.Is(err, service.ErrDay) || errors.Is(err, service.ErrRepeat) {
+			service.SendErrorJSON(w, err.Error(), http.StatusBadRequest)
+		} else {
+			service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+		}
 		return
 	}
 

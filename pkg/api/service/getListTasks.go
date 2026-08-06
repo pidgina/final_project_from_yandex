@@ -2,53 +2,54 @@ package service
 
 import (
 	"database/sql"
-	"encoding/json"
-	"fmt"
-	"net/http"
 	"time"
+
+	"proj/pkg/db"
 
 	_ "modernc.org/sqlite"
 )
 
-func GetListTask(limit int, w http.ResponseWriter, r *http.Request) ([]byte, error, int) {
+type TasksResp struct {
+	Tasks []Task `json:"tasks"`
+}
 
-	type TasksResp struct {
-		Tasks []Task `json:"tasks"`
-	}
+const (
+	Limit = 50
+)
 
-	db, err := sql.Open("sqlite", PathDbManual())
-	if err != nil {
-		return nil, err, http.StatusInternalServerError
-	}
-	defer db.Close()
+func GetListTask(limit int, search string) (TasksResp, error) {
 
-	search := r.FormValue("search")
-
-	var rows *sql.Rows
+	var (
+		rows *sql.Rows
+		err  error
+	)
 	if search == "" {
-		searchParam := "%" + search + "%"
-		rows, err = db.Query(
-			"SELECT * FROM scheduler WHERE title LIKE ? OR comment LIKE ? ORDER BY date LIMIT ?",
-			searchParam, searchParam, limit,
+		rows, err = db.DBOpen.Query(
+			"SELECT * FROM scheduler ORDER BY date LIMIT ?",
+			limit,
 		)
 		if err != nil {
-			return nil, err, http.StatusInternalServerError
+			return TasksResp{}, err
 		}
 		defer rows.Close()
+
 	} else {
-		midleLayout := "02.01.2006"
-		tims, err := time.Parse(midleLayout, search)
-		timesis := tims.Format(LayoutDate)
+		tims, err := time.Parse("02.01.2006", search)
 		if err == nil {
-			rows, err = db.Query(fmt.Sprint("SELECT * FROM scheduler WHERE date LIKE '%", timesis, "%';"))
+			timesis := tims.Format(LayoutDate)
+
+			rows, err = db.DBOpen.Query("SELECT * FROM scheduler WHERE date = ? ORDER BY date LIMIT ?",
+				timesis, limit)
 			if err != nil {
-				return nil, err, http.StatusInternalServerError
+				return TasksResp{}, err
 			}
 			defer rows.Close()
 		} else {
-			rows, err = db.Query(fmt.Sprint("SELECT * FROM scheduler WHERE title || comment LIKE '%", search, "%';"))
+			searchFind := "%" + search + "%"
+			rows, err = db.DBOpen.Query("SELECT * FROM scheduler WHERE title LIKE ? OR comment LIKE ? ORDER BY date LIMIT ?",
+				searchFind, searchFind, limit)
 			if err != nil {
-				return nil, err, http.StatusInternalServerError
+				return TasksResp{}, err
 			}
 			defer rows.Close()
 		}
@@ -61,23 +62,19 @@ func GetListTask(limit int, w http.ResponseWriter, r *http.Request) ([]byte, err
 	for rows.Next() {
 		err := rows.Scan(&res.ID, &res.Date, &res.Title, &res.Comment, &res.Repeat)
 		if err != nil {
-			return nil, err, http.StatusInternalServerError
+			return TasksResp{}, err
 		}
 		resTask.Tasks = append(resTask.Tasks, res)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err, http.StatusInternalServerError
+		return TasksResp{}, err
 	}
 
 	if resTask.Tasks == nil {
 		resTask.Tasks = []Task{}
 	}
 
-	jsonbyte, err := json.Marshal(resTask)
-	if err != nil {
-		return nil, err, http.StatusInternalServerError
-	}
-	return jsonbyte, nil, http.StatusOK
+	return resTask, nil
 
 }

@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 
 	"proj/pkg/api/service"
 )
 
-func PutTaskHandler(w http.ResponseWriter, r *http.Request) {
+func AddTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	var task service.Task
 
@@ -28,19 +29,31 @@ func PutTaskHandler(w http.ResponseWriter, r *http.Request) {
 		service.SendErrorJSON(w, "Не указан заголовок задачи", http.StatusBadRequest)
 		return
 	}
-
 	err = service.CheckDate(&task)
 	if err != nil {
-		service.SendErrorJSON(w, "Ошибка при проверке параметров", http.StatusBadRequest)
+		service.SendErrorJSON(w, "Ошибка при проверке параметров.", http.StatusBadRequest)
 		return
 	}
 
-	byteResp, err := service.UpdateTask(task)
+	id, err := service.AddTask(task)
 	if err != nil {
 		service.SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	service.SendOkJSONBytes(w, http.StatusOK, byteResp)
+	type response struct {
+		ID string `json:"id"`
+	}
+	var resp response
+
+	resp.ID = strconv.Itoa(int(id))
+
+	jsByte, err := json.Marshal(resp)
+	if err != nil {
+		service.SendErrorJSON(w, "Ошибка подготовки ответа", http.StatusInternalServerError)
+		return
+	}
+
+	service.SendOkJSONBytes(w, http.StatusCreated, jsByte)
 
 }

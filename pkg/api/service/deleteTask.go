@@ -1,28 +1,25 @@
 package service
 
 import (
-	"database/sql"
-	"net/http"
+	"errors"
+
+	"proj/pkg/db"
 )
 
-func DeleteTask(id string) ([]byte, error, int) {
+var NoneID = errors.New("Задача с указанным id не найдена")
 
-	db, err := sql.Open("sqlite", PathDbManual())
-	if err != nil {
-		return nil, err, http.StatusInternalServerError
-	}
-	defer db.Close()
+func DeleteTask(id string) ([]byte, error) {
 
-	taska, err, status := GetTaskID(id)
+	taska, err := GetTaskID(id)
 	if err != nil {
-		return nil, err, status
+		return nil, NoneID
 	}
 
-	_, err = db.Exec("DELETE FROM scheduler WHERE id = :id", sql.Named("id", taska.ID))
+	_, err = db.DBOpen.Exec("DELETE FROM scheduler WHERE id = ?", taska.ID)
 	if err != nil {
-		return nil, err, http.StatusInternalServerError
+		return nil, err
 	}
 
-	return []byte("{}"), nil, http.StatusOK
+	return []byte("{}"), nil
 
 }

@@ -17,16 +17,18 @@ const Schema string = `CREATE TABLE IF NOT EXISTS scheduler (
 
 CREATE INDEX IF NOT EXISTS idx_date ON scheduler (date);`
 
-func Init(dbFile string) error {
+var DBOpen *sql.DB
 
-	dbase, err := sql.Open("sqlite", dbFile)
+func Init(dbFile string) error {
+	var err error
+
+	DBOpen, err = sql.Open("sqlite", dbFile)
 	if err != nil {
 		log.Println(err)
 		return err
 	}
-	defer dbase.Close()
 
-	_, err = dbase.Exec(Schema)
+	_, err = DBOpen.Exec(Schema)
 	if err != nil {
 		log.Println(err)
 		return err
