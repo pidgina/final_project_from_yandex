@@ -16,11 +16,7 @@ func PostDone(id string) error {
 		return db.DeleteTask(id)
 	}
 
-	nextDate, err := NextDate(
-		time.Now(),
-		task.Date,
-		task.Repeat,
-	)
+	nextDate, err := NextDate(time.Now(), task.Date, task.Repeat)
 	if err != nil {
 		return err
 	}

@@ -22,10 +22,15 @@ func GetTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonbyte, err := json.Marshal(tasksResponse{
+	jsonByte, err := json.Marshal(tasksResponse{
 		Tasks: tasks,
 	})
+	if err != nil {
+		log.Println(err.Error())
+		SendErrorJSON(w, "Не удалось подготовить тело ответа.", http.StatusInternalServerError)
+		return
+	}
 
-	SendOkJSONBytes(w, http.StatusOK, jsonbyte)
+	SendOkJSONBytes(w, http.StatusOK, jsonByte)
 
 }

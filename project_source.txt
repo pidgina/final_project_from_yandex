@@ -1119,21 +1119,18 @@ FILE: ./pkg/db/deleteTask.go
 ==================================================
 package db
 
-func DeleteTask(id string) ([]byte, error) {
+func DeleteTask(id string) error {
 	task, err := GetTaskID(id)
 	if err != nil {
-		return nil, NoneID
+		return NoneID
 	}
 
 	_, err = DBOpen.Exec(
 		"DELETE FROM scheduler WHERE id = ?",
 		task.ID,
 	)
-	if err != nil {
-		return nil, err
-	}
 
-	return []byte("{}"), nil
+	return err
 }
 
 
@@ -1142,36 +1139,34 @@ FILE: ./pkg/db/updateTask.go
 ==================================================
 package db
 
-import (
-	"errors"
-)
+import "errors"
 
 var NoneID = errors.New("Задача с указанным id не найдена")
 
-func UpdateTask(task Task) ([]byte, error) {
+func UpdateTask(task Task) error {
 	if task.ID == "" {
-		return nil, NoneID
+		return NoneID
 	}
 
 	_, err := GetTaskID(task.ID)
 	if err != nil {
-		return nil, NoneID
+		return NoneID
 	}
 
-	_, err = DBOpen.Exec(`UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?`,
+	_, err = DBOpen.Exec(
+		`UPDATE scheduler
+		 SET date = ?, title = ?, comment = ?, repeat = ?
+		 WHERE id = ?`,
 		task.Date,
 		task.Title,
 		task.Comment,
 		task.Repeat,
 		task.ID,
 	)
-	if err != nil {
-		return nil, err
-	}
 
-	return []byte("{}"), nil
-
+	return err
 }
+
 func UpdateTaskDate(id string, date string) error {
 	_, err := DBOpen.Exec(
 		"UPDATE scheduler SET date = ? WHERE id = ?",
@@ -1254,75 +1249,73 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-type TasksResp struct {
-	Tasks []Task `json:"tasks"`
-}
-
 const (
 	Limit = 50
 )
 
-func GetListTask(limit int, search string) (TasksResp, error) {
-	var LayoutDate string = "20060102"
-
+func GetListTask(limit int, search string) ([]Task, error) {
 	var (
 		rows *sql.Rows
 		err  error
 	)
+
 	if search == "" {
 		rows, err = DBOpen.Query(
 			"SELECT * FROM scheduler ORDER BY date LIMIT ?",
 			limit,
 		)
-		if err != nil {
-			return TasksResp{}, err
-		}
-		defer rows.Close()
-
 	} else {
-		tims, err := time.Parse("02.01.2006", search)
-		if err == nil {
-			timesis := tims.Format(LayoutDate)
+		searchDate, parseErr := time.Parse("02.01.2006", search)
 
-			rows, err = DBOpen.Query("SELECT * FROM scheduler WHERE date = ? ORDER BY date LIMIT ?",
-				timesis, limit)
-			if err != nil {
-				return TasksResp{}, err
-			}
-			defer rows.Close()
+		if parseErr == nil {
+			rows, err = DBOpen.Query(
+				"SELECT * FROM scheduler WHERE date = ? ORDER BY date LIMIT ?",
+				searchDate.Format("20060102"),
+				limit,
+			)
 		} else {
-			searchFind := "%" + search + "%"
-			rows, err = DBOpen.Query("SELECT * FROM scheduler WHERE title LIKE ? OR comment LIKE ? ORDER BY date LIMIT ?",
-				searchFind, searchFind, limit)
-			if err != nil {
-				return TasksResp{}, err
-			}
-			defer rows.Close()
-		}
+			searchValue := "%" + search + "%"
 
+			rows, err = DBOpen.Query(
+				`SELECT * FROM scheduler
+				 WHERE title LIKE ? OR comment LIKE ?
+				 ORDER BY date
+				 LIMIT ?`,
+				searchValue,
+				searchValue,
+				limit,
+			)
+		}
 	}
 
-	var res Task
-	var resTask TasksResp
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	tasks := make([]Task, 0)
 
 	for rows.Next() {
-		err := rows.Scan(&res.ID, &res.Date, &res.Title, &res.Comment, &res.Repeat)
-		if err != nil {
-			return TasksResp{}, err
+		var task Task
+
+		if err := rows.Scan(
+			&task.ID,
+			&task.Date,
+			&task.Title,
+			&task.Comment,
+			&task.Repeat,
+		); err != nil {
+			return nil, err
 		}
-		resTask.Tasks = append(resTask.Tasks, res)
+
+		tasks = append(tasks, task)
 	}
 
 	if err := rows.Err(); err != nil {
-		return TasksResp{}, err
+		return nil, err
 	}
 
-	if resTask.Tasks == nil {
-		resTask.Tasks = []Task{}
-	}
-
-	return resTask, nil
-
+	return tasks, nil
 }
 
 
@@ -1424,10 +1417,10 @@ import (
 	"proj/pkg/db"
 )
 
-func PostDone(id string) ([]byte, error) {
+func PostDone(id string) error {
 	task, err := db.GetTaskID(id)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if task.Repeat == "" {
@@ -1440,14 +1433,10 @@ func PostDone(id string) ([]byte, error) {
 		task.Repeat,
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if err := db.UpdateTaskDate(task.ID, nextDate); err != nil {
-		return nil, err
-	}
-
-	return []byte("{}"), nil
+	return db.UpdateTaskDate(task.ID, nextDate)
 }
 
 
@@ -1765,24 +1754,31 @@ import (
 
 func DeleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
-
 	if id == "" {
-		SendErrorJSON(w, "Поле id не может быть пустым", http.StatusBadRequest)
+		SendErrorJSON(
+			w,
+			"Поле id не может быть пустым",
+			http.StatusBadRequest,
+		)
 		return
 	}
 
-	byteResp, err := db.DeleteTask(id)
+	err := db.DeleteTask(id)
 	if err != nil {
 		if errors.Is(err, db.NoneID) {
 			SendErrorJSON(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
+
+		SendErrorJSON(
+			w,
+			err.Error(),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
-	SendOkJSONBytes(w, http.StatusOK, byteResp)
-
+	SendOkJSONBytes(w, http.StatusOK, []byte("{}"))
 }
 
 
@@ -1974,6 +1970,10 @@ import (
 	"proj/pkg/db"
 )
 
+type tasksResponse struct {
+	Tasks []db.Task `json:"tasks"`
+}
+
 func GetTaskHandler(w http.ResponseWriter, r *http.Request) {
 	search := r.FormValue("search")
 
@@ -1984,12 +1984,9 @@ func GetTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonbyte, err := json.Marshal(tasks)
-	if err != nil {
-		log.Println(err.Error())
-		SendErrorJSON(w, "Не удалось подготовить тело ответа.", http.StatusInternalServerError)
-		return
-	}
+	jsonbyte, err := json.Marshal(tasksResponse{
+		Tasks: tasks,
+	})
 
 	SendOkJSONBytes(w, http.StatusOK, jsonbyte)
 
@@ -2015,12 +2012,12 @@ func DonePostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	byteResp, err := service.PostDone(id)
+	err := service.PostDone(id)
 	if err != nil {
 		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	SendOkJSONBytes(w, http.StatusOK, byteResp)
+	SendOkJSONBytes(w, http.StatusOK, []byte("{}"))
 
 }
 
@@ -2066,13 +2063,13 @@ func PutTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	byteResp, err := db.UpdateTask(task)
+	err = db.UpdateTask(task)
 	if err != nil {
 		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	SendOkJSONBytes(w, http.StatusOK, byteResp)
+	SendOkJSONBytes(w, http.StatusOK, []byte("{}"))
 
 }
 

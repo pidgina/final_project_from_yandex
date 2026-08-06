@@ -99,10 +99,7 @@ func NextDate(now time.Time, dstart string, repeat string) (string, error) {
 		}
 
 		if !CheckMounth(daysAll, mounthAll) {
-			return "", fmt.Errorf(
-				"%w: в выбранных месяцах нет указанных дней",
-				ErrRepeat,
-			)
+			return "", fmt.Errorf("%w: в выбранных месяцах нет указанных дней", ErrRepeat)
 		}
 
 		for {

@@ -15,9 +15,7 @@ func UpdateTask(task Task) error {
 	}
 
 	_, err = DBOpen.Exec(
-		`UPDATE scheduler
-		 SET date = ?, title = ?, comment = ?, repeat = ?
-		 WHERE id = ?`,
+		`UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?`,
 		task.Date,
 		task.Title,
 		task.Comment,

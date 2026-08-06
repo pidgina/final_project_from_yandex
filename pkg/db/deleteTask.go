@@ -7,8 +7,7 @@ func DeleteTask(id string) error {
 	}
 
 	_, err = DBOpen.Exec(
-		"DELETE FROM scheduler WHERE id = ?",
-		task.ID,
+		"DELETE FROM scheduler WHERE id = ?", task.ID,
 	)
 
 	return err

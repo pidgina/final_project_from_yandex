@@ -10,11 +10,7 @@ import (
 func DeleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" {
-		SendErrorJSON(
-			w,
-			"Поле id не может быть пустым",
-			http.StatusBadRequest,
-		)
+		SendErrorJSON(w, "Поле id не может быть пустым", http.StatusBadRequest)
 		return
 	}
 
@@ -25,11 +21,7 @@ func DeleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		SendErrorJSON(
-			w,
-			err.Error(),
-			http.StatusInternalServerError,
-		)
+		SendErrorJSON(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
