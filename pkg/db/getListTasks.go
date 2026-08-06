@@ -7,73 +7,71 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-type TasksResp struct {
-	Tasks []Task `json:"tasks"`
-}
-
 const (
 	Limit = 50
 )
 
-func GetListTask(limit int, search string) (TasksResp, error) {
-	var LayoutDate string = "20060102"
-
+func GetListTask(limit int, search string) ([]Task, error) {
 	var (
 		rows *sql.Rows
 		err  error
 	)
+
 	if search == "" {
 		rows, err = DBOpen.Query(
 			"SELECT * FROM scheduler ORDER BY date LIMIT ?",
 			limit,
 		)
-		if err != nil {
-			return TasksResp{}, err
-		}
-		defer rows.Close()
-
 	} else {
-		tims, err := time.Parse("02.01.2006", search)
-		if err == nil {
-			timesis := tims.Format(LayoutDate)
+		searchDate, parseErr := time.Parse("02.01.2006", search)
 
-			rows, err = DBOpen.Query("SELECT * FROM scheduler WHERE date = ? ORDER BY date LIMIT ?",
-				timesis, limit)
-			if err != nil {
-				return TasksResp{}, err
-			}
-			defer rows.Close()
+		if parseErr == nil {
+			rows, err = DBOpen.Query(
+				"SELECT * FROM scheduler WHERE date = ? ORDER BY date LIMIT ?",
+				searchDate.Format("20060102"),
+				limit,
+			)
 		} else {
-			searchFind := "%" + search + "%"
-			rows, err = DBOpen.Query("SELECT * FROM scheduler WHERE title LIKE ? OR comment LIKE ? ORDER BY date LIMIT ?",
-				searchFind, searchFind, limit)
-			if err != nil {
-				return TasksResp{}, err
-			}
-			defer rows.Close()
-		}
+			searchValue := "%" + search + "%"
 
+			rows, err = DBOpen.Query(
+				`SELECT * FROM scheduler
+				 WHERE title LIKE ? OR comment LIKE ?
+				 ORDER BY date
+				 LIMIT ?`,
+				searchValue,
+				searchValue,
+				limit,
+			)
+		}
 	}
 
-	var res Task
-	var resTask TasksResp
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	tasks := make([]Task, 0)
 
 	for rows.Next() {
-		err := rows.Scan(&res.ID, &res.Date, &res.Title, &res.Comment, &res.Repeat)
-		if err != nil {
-			return TasksResp{}, err
+		var task Task
+
+		if err := rows.Scan(
+			&task.ID,
+			&task.Date,
+			&task.Title,
+			&task.Comment,
+			&task.Repeat,
+		); err != nil {
+			return nil, err
 		}
-		resTask.Tasks = append(resTask.Tasks, res)
+
+		tasks = append(tasks, task)
 	}
 
 	if err := rows.Err(); err != nil {
-		return TasksResp{}, err
+		return nil, err
 	}
 
-	if resTask.Tasks == nil {
-		resTask.Tasks = []Task{}
-	}
-
-	return resTask, nil
-
+	return tasks, nil
 }

@@ -8,6 +8,10 @@ import (
 	"proj/pkg/db"
 )
 
+type tasksResponse struct {
+	Tasks []db.Task `json:"tasks"`
+}
+
 func GetTaskHandler(w http.ResponseWriter, r *http.Request) {
 	search := r.FormValue("search")
 
@@ -18,12 +22,9 @@ func GetTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonbyte, err := json.Marshal(tasks)
-	if err != nil {
-		log.Println(err.Error())
-		SendErrorJSON(w, "Не удалось подготовить тело ответа.", http.StatusInternalServerError)
-		return
-	}
+	jsonbyte, err := json.Marshal(tasksResponse{
+		Tasks: tasks,
+	})
 
 	SendOkJSONBytes(w, http.StatusOK, jsonbyte)
 
