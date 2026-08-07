@@ -31,6 +31,7 @@ func Init(dbFile string) error {
 	_, err = DBOpen.Exec(Schema)
 	if err != nil {
 		log.Println(err)
+		DBOpen.Close()
 		return err
 	}
 

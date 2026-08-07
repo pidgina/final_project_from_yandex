@@ -35,10 +35,9 @@ func GetListTask(limit int, search string) ([]Task, error) {
 			searchValue := "%" + search + "%"
 
 			rows, err = DBOpen.Query(
-				`SELECT * FROM scheduler WHERE title LIKE ? OR comment LIKE ? ORDER BY date LIMIT ?`,
-				searchValue,
-				searchValue,
-				limit,
+				`SELECT * FROM scheduler WHERE title LIKE :search OR comment LIKE :search ORDER BY date LIMIT :limit`,
+				sql.Named("search", searchValue),
+				sql.Named("limit", limit),
 			)
 		}
 	}

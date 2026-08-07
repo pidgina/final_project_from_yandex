@@ -32,6 +32,10 @@ func SendErrorJSON(w http.ResponseWriter, errorString string, statusCode int) {
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(statusCode)
-	w.Write(jsByte)
+
+	_, err = w.Write(jsByte)
+	if err != nil {
+		log.Printf("Ошибка записи JSON ответа: %v", err)
+	}
 
 }

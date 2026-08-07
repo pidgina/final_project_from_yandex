@@ -1,6 +1,9 @@
 package db
 
-import "errors"
+import (
+	"database/sql"
+	"errors"
+)
 
 var NoneID = errors.New("Задача с указанным id не найдена")
 
@@ -15,12 +18,12 @@ func UpdateTask(task Task) error {
 	}
 
 	_, err = DBOpen.Exec(
-		`UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?`,
-		task.Date,
-		task.Title,
-		task.Comment,
-		task.Repeat,
-		task.ID,
+		`UPDATE scheduler SET date = :date, title = :title, comment = :comment, repeat = :repeat WHERE id = :id`,
+		sql.Named("date", task.Date),
+		sql.Named("title", task.Title),
+		sql.Named("comment", task.Comment),
+		sql.Named("repeat", task.Repeat),
+		sql.Named("id", task.ID),
 	)
 
 	return err
